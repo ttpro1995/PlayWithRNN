@@ -28,7 +28,10 @@ opt.rnn_size = 128
  vocab_size = loader.vocab_size  -- the number of distinct characters
  vocab = loader.vocab_mapping
 print('vocab size: ' .. vocab_size)
-opt.input_size = vocab_size
+
+opt.input_size = 50
+opt.output_size = vocab_size
+
 -- 1: train 2:val 3: text
 -- loader:next_batch(num)
 
@@ -111,11 +114,6 @@ function test()
       local output = model[t]:forward({x[t], h[t-1]}) -- TODO: size missmatch 
       h[t] = output[1]
       predict[t] = output[2]
-      print (t)
-      if (t == 2) then
-        print(predict[t])
-        print(y[t])
-      end
       loss = loss + criterion[t]:forward(predict[t],y[t])
     end
 

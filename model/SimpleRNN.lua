@@ -15,7 +15,7 @@ function RNN.create(opt)
   local h = nn.Tanh()({a})
 
   -- the decoder
-  local o = nn.Linear(opt.rnn_size,opt.input_size)({h})
+  local o = nn.Linear(opt.rnn_size,opt.output_size)({h})
   local y = nn.LogSoftMax()({o})
 
 
