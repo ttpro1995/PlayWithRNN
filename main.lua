@@ -92,7 +92,7 @@ optimState ={
 }
 
 for epoch = 1, 100 do
-  --optim.sgd(feval,params, optimState)
+  optim.sgd(feval,params, optimState)
 end
 
 
@@ -111,7 +111,7 @@ function test()
 
     --forward pass
     for t = 1, opt.seq_length do
-      local output = model[t]:forward({x[t], h[t-1]}) -- TODO: size missmatch 
+      local output = model[t]:forward({x[t], h[t-1]}) 
       h[t] = output[1]
       predict[t] = output[2]
       loss = loss + criterion[t]:forward(predict[t],y[t])
@@ -131,3 +131,4 @@ function test()
 end
 
 test()
+--
