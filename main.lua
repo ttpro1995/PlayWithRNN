@@ -66,6 +66,7 @@ function feval(params)
 
     -- forward pass
     for t = 1, opt.seq_length do
+      model[t]:training()
       local output = model[t]:forward({x[t], h[t-1]})
       h[t] = output[1]
       predict[t] = output[2]
@@ -130,5 +131,13 @@ function test()
     return loss, gradParams
 end
 
-test()
---
+-- create ivocab
+ivocab = {}
+ivocab = create_ivocab(vocab)
+
+function evaluate(seedtext)
+    for c in seedtext do
+        
+    end
+
+end

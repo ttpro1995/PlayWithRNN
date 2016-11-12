@@ -37,3 +37,12 @@ function prepro(x,y)
     y = y:double()
     return x,y
 end
+
+-- translate from number to char
+function create_ivocab(vocab)
+    local ivocab = {}
+    for c,i in pairs(vocab) do 
+        ivocab[i] = c
+    end
+    return ivocab
+end
