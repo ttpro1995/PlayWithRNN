@@ -30,7 +30,7 @@ opt.rnn_size = 128
 print('vocab size: ' .. vocab_size)
 
 opt.input_size = 1
-opt.output_size = vocab_size
+opt.output_size = vocab_size 
 
 -- 1: train 2:val 3: text
 -- loader:next_batch(num)
