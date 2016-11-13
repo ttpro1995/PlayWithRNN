@@ -29,7 +29,7 @@ opt.rnn_size = 128
  vocab = loader.vocab_mapping
 print('vocab size: ' .. vocab_size)
 
-opt.input_size = 50
+opt.input_size = 1
 opt.output_size = vocab_size
 
 -- 1: train 2:val 3: text
@@ -61,13 +61,13 @@ function feval(params)
     -- y label
     x, y = loader:next_batch(1)
     x, y = prepro(x,y)
-    h_0 = torch.Tensor(opt.rnn_size):zero()
+    h_0 = torch.Tensor(opt.batch_size,opt.rnn_size):zero()
     h[0] = h_0
 
     -- forward pass
     for t = 1, opt.seq_length do
       model[t]:training()
-      local output = model[t]:forward({x[t], h[t-1]})
+      local output = model[t]:forward({x[t]:unfold(1,1,1), h[t-1]}) --x[t]:unfold(1,1,1) is element t in sequence of each batch
       h[t] = output[1]
       predict[t] = output[2]
       loss = loss + criterion[t]:forward(predict[t],y[t])
@@ -78,7 +78,7 @@ function feval(params)
     dh[opt.seq_length] = h_0
     for t = opt.seq_length, 1, -1 do
       local doutput = criterion[t]:backward(predict[t], y[t])
-      local d = model[t]:backward({x[t],h[t-1]},{dh[t],doutput})
+      local d = model[t]:backward({x[t]:unfold(1,1,1),h[t-1]},{dh[t],doutput})
       dh[t-1] = d[2]
     end
     loss = loss / opt.seq_length
@@ -92,10 +92,11 @@ optimState ={
   learningRate = 0.01
 }
 
-for epoch = 1, 100 do
+local timer = torch.Timer()
+for epoch = 1, 423 do
   optim.sgd(feval,params, optimState)
 end
-
+print(timer:time().real .. ' seconds')
 
 function test()
   predict ={} -- y^
@@ -112,7 +113,7 @@ function test()
 
     --forward pass
     for t = 1, opt.seq_length do
-      local output = model[t]:forward({x[t], h[t-1]}) 
+      local output = model[t]:forward({x[t], h[t-1]})
       h[t] = output[1]
       predict[t] = output[2]
       loss = loss + criterion[t]:forward(predict[t],y[t])
@@ -137,7 +138,7 @@ ivocab = create_ivocab(vocab)
 
 function evaluate(seedtext)
     for c in seedtext do
-        
+
     end
 
 end
