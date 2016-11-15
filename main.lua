@@ -30,7 +30,7 @@ opt.rnn_size = 128
 print('vocab size: ' .. vocab_size)
 
 opt.input_size = 1
-opt.output_size = vocab_size 
+opt.output_size = vocab_size
 
 -- 1: train 2:val 3: text
 -- loader:next_batch(num)
@@ -50,6 +50,7 @@ for i = 1,opt.seq_length do
   table.insert(criterion,crit)
 end
 
+final_lost = 0
 -- feval
 function feval(params)
   local predict ={} -- y^
@@ -66,7 +67,6 @@ function feval(params)
 
     -- forward pass
     for t = 1, opt.seq_length do
-      model[t]:training()
       local output = model[t]:forward({x[t]:unfold(1,1,1), h[t-1]}) --x[t]:unfold(1,1,1) is element t in sequence of each batch
       h[t] = output[1]
       predict[t] = output[2]
@@ -82,7 +82,7 @@ function feval(params)
       dh[t-1] = d[2]
     end
     loss = loss / opt.seq_length
-
+    final_lost = loss
     return loss, gradParams
 end
 
@@ -93,10 +93,11 @@ optimState ={
 }
 
 local timer = torch.Timer()
-for epoch = 1, 423 do
+for epoch = 1, 100 do
   optim.sgd(feval,params, optimState)
 end
 print(timer:time().real .. ' seconds')
+print('lost '..final_lost)
 
 function test()
   predict ={} -- y^
@@ -137,8 +138,18 @@ ivocab = {}
 ivocab = create_ivocab(vocab)
 
 function evaluate(seedtext)
-    for c in seedtext do
+    local h = torch.Tensor(opt.rnn_size):zero()
+    for c in seedtext:gmatch'.' do
+      local prev_char = torch.Tensor{vocab[c]}
 
+      local outputs = master_cell:forward({prev_char,h});
+      local h = outputs[1]
+      local pred = outputs[2]
+      local val, idx = torch.max(pred,1)
+      local cur_char = idx
+      print(prev_char ,pred)
     end
 
 end
+
+-- evaluate('abc')

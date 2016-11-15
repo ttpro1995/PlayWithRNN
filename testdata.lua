@@ -16,7 +16,7 @@ opt.seq_length =50
 opt.train_frac =0.95
 opt.val_frac =0.05
 
-opt.rnn_size = 128
+opt.rnn_size = 300
 
 
  test_frac = math.max(0, 1 - (opt.train_frac + opt.val_frac))
@@ -34,7 +34,17 @@ opt.output_size = vocab_size
 
 
 x, y = loader:next_batch(1)
-x, y = prepro(x,y)
+--x, y = prepro(x,y)
 
-a = x:narrow(2,1,1)
-b = y:narrow(2,1,1):squeeze()
+--a = x:narrow(2,1,1)
+--b = y:narrow(2,1,1):squeeze()
+input = x[1]
+output = y[1]
+ivocab = {}
+ivocab = create_ivocab(vocab)
+
+
+
+for i = 1,50 do
+  print(ivocab[input[i]], ivocab[output[i]])
+end
