@@ -52,7 +52,14 @@ end
 
 final_lost = 0
 -- feval
-function feval(params)
+function feval(x)
+-- This part is important, dont skip it
+  if x ~= params then
+	  params:copy(x)
+  end
+  gradParams:zero()
+-- important for feval
+
   local predict ={} -- y^
   local h = {} -- h
   local loss = 0
@@ -67,6 +74,7 @@ function feval(params)
 
     -- forward pass
     for t = 1, opt.seq_length do
+      model[t]:training()
       local output = model[t]:forward({x[t]:unfold(1,1,1), h[t-1]}) --x[t]:unfold(1,1,1) is element t in sequence of each batch
       h[t] = output[1]
       predict[t] = output[2]
@@ -82,6 +90,7 @@ function feval(params)
       dh[t-1] = d[2]
     end
     loss = loss / opt.seq_length
+--    print(loss)
     final_lost = loss
     return loss, gradParams
 end
@@ -93,7 +102,7 @@ optimState ={
 }
 
 local timer = torch.Timer()
-for epoch = 1, 100 do
+for epoch = 1, 1000 do
   optim.sgd(feval,params, optimState)
 end
 print(timer:time().real .. ' seconds')
@@ -138,18 +147,18 @@ ivocab = {}
 ivocab = create_ivocab(vocab)
 
 function evaluate(seedtext)
+    master_cell:evaluate()
     local h = torch.Tensor(opt.rnn_size):zero()
     for c in seedtext:gmatch'.' do
-      local prev_char = torch.Tensor{vocab[c]}
-
-      local outputs = master_cell:forward({prev_char,h});
-      local h = outputs[1]
-      local pred = outputs[2]
-      local val, idx = torch.max(pred,1)
-      local cur_char = idx
-      print(prev_char ,pred)
+      prev_char = torch.Tensor{vocab[c]}
+      outputs = master_cell:forward({prev_char,h});
+      h = outputs[1]
+      pred = outputs[2]
+      val, idx = torch.max(pred,1)
+      cur_char = idx
+      print(ivocab[prev_char[1]],ivocab[cur_char[1]])
     end
 
 end
 
--- evaluate('abc')
+evaluate("We are accounted poor citizens, the patricians good.What authority surfeits on would relieve us: if theywould yield us but the superfluity, while it werewholesome, we might guess they relieved us humanely;but they think we are too dear: the leanness thatafflicts us, the object of our misery, is as aninventory to particularise their abundance; oursufferance is a gain to them Let us revenge this withour pikes, ere we become rakes: for the gods know Ispeak this in hunger for bread, not in thirst for revenge.")
