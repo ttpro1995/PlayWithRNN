@@ -4,6 +4,7 @@ require 'nngraph'
 require 'optim'
 require 'model.SimpleRNN'
 require 'util.misc' -- share_params
+require 'util.encoder'
 require 'optim'
 
 local CharSplitLMMinibatchLoader = require 'util.CharSplitLMMinibatchLoader'
@@ -29,7 +30,7 @@ opt.rnn_size = 128
  vocab = loader.vocab_mapping
 print('vocab size: ' .. vocab_size)
 
-opt.input_size = 1
+opt.input_size = vocab_size
 opt.output_size = vocab_size
 
 -- 1: train 2:val 3: text
@@ -75,7 +76,8 @@ function feval(x)
     -- forward pass
     for t = 1, opt.seq_length do
       model[t]:training()
-      local output = model[t]:forward({x[t]:unfold(1,1,1), h[t-1]}) --x[t]:unfold(1,1,1) is element t in sequence of each batch
+      local input_x = encoder.oneHot(x[t],vocab_size) -- convert into one hot vector
+      local output = model[t]:forward({input_x, h[t-1]}) --x[t]:unfold(1,1,1) is element t in sequence of each batch
       h[t] = output[1]
       predict[t] = output[2]
       loss = loss + criterion[t]:forward(predict[t],y[t])
@@ -86,7 +88,8 @@ function feval(x)
     dh[opt.seq_length] = h_0
     for t = opt.seq_length, 1, -1 do
       local doutput = criterion[t]:backward(predict[t], y[t])
-      local d = model[t]:backward({x[t]:unfold(1,1,1),h[t-1]},{dh[t],doutput})
+      local input_x = encoder.oneHot(x[t],vocab_size) -- convert into one hot vector
+      local d = model[t]:backward({input_x,h[t-1]},{dh[t],doutput})
       dh[t-1] = d[2]
     end
     loss = loss / opt.seq_length
@@ -151,7 +154,8 @@ function evaluate(seedtext)
     local h = torch.Tensor(opt.rnn_size):zero()
     for c in seedtext:gmatch'.' do
       prev_char = torch.Tensor{vocab[c]}
-      outputs = master_cell:forward({prev_char,h});
+      local input_x = encoder.oneHot(prev_char, vocab_size)
+      outputs = master_cell:forward({input_x,h});
       h = outputs[1]
       pred = outputs[2]
       val, idx = torch.max(pred,1)
