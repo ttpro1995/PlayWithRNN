@@ -152,6 +152,7 @@ ivocab = create_ivocab(vocab)
 function evaluate(seedtext)
     master_cell:evaluate()
     local h = torch.Tensor(opt.rnn_size):zero()
+    output_text = ""
     for c in seedtext:gmatch'.' do
       prev_char = torch.Tensor{vocab[c]}
       local input_x = encoder.oneHot(prev_char, vocab_size)
@@ -159,9 +160,9 @@ function evaluate(seedtext)
       h = outputs[1]
       pred = outputs[2]
       val, idx = torch.max(pred,1)
-      cur_char = idx
-      print(ivocab[prev_char[1]],ivocab[cur_char[1]])
+      output_text = output_text..ivocab[idx[1]]
     end
+    print(output_text)
 
 end
 
