@@ -5,6 +5,7 @@ require 'optim'
 require 'model.SimpleRNN'
 require 'util.misc' -- share_params
 require 'optim'
+require 'util.encoder'
 
 local CharSplitLMMinibatchLoader = require 'util.CharSplitLMMinibatchLoader'
 
@@ -39,6 +40,7 @@ x, y = loader:next_batch(1)
 --a = x:narrow(2,1,1)
 --b = y:narrow(2,1,1):squeeze()
 input = x[1]
+input = encoder.oneHot(input,vocab_size)
 output = y[1]
 ivocab = {}
 ivocab = create_ivocab(vocab)
@@ -46,5 +48,5 @@ ivocab = create_ivocab(vocab)
 
 
 for i = 1,50 do
-  print(ivocab[input[i]], ivocab[output[i]])
+  --print(ivocab[input[i]], ivocab[output[i]])
 end
