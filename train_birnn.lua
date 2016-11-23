@@ -40,7 +40,7 @@ opt.output_size = vocab_size
 -- master cell for all other cell to share params with
 master_cell = RNN.create(opt)
 -- decoder from hidden layer to output
-decoder = RNN:create(opt)
+birnn_decoder = decoder:create(opt)
 -- a modules to get parameters of cell and decoder
 local modules = nn.Parallel()
 modules:add(master_cell)
@@ -50,11 +50,10 @@ params, gradParams = modules:getParameters()
 -- create a rnn chain
 model = {}
 model_b = {} -- reserve
-criterion = {}
+criterion = nn.ClassNLLCriterion() -- only one criterion
 for i = 1,opt.seq_length do
   local cell = RNN.create(opt)
   local cell_b = RNN.create(opt)
-  local crit = nn.ClassNLLCriterion()
   share_params(cell,master_cell)
   table.insert(model, cell)
   table.insert(model, cell_b)
@@ -65,15 +64,16 @@ end
 
 final_lost = 0
 -- feval
-function feval(x)
+function feval(p)
 -- This part is important, dont skip it
-  if x ~= params then
-	  params:copy(x)
+  if p ~= params then
+	  params:copy(p)
   end
   gradParams:zero()
 -- important for feval
 
   local predict ={} -- y^
+  local rep = {} -- rep = {h, h_b}. raw output of cell, not yet decode.
   local h = {} -- h
   local h_b = {} -- h for reserve rnn
   local loss = 0
@@ -105,17 +105,29 @@ function feval(x)
       local h_b[t] = model_b[t]:forward({input_x, h[t+1]})
     end
 
-    --  TODO: from here
+
+
+    -- calculate predict
+    rep = {h,h_b}
+    local predict = birnn_decoder:forward(rep)
+
+    -- calculate loss
+    loss = criterion:forward(predict,y)
+
+
     -- backward pass
-    local dh = {}
-    dh[opt.seq_length] = h_0
-    for t = opt.seq_length, 1, -1 do
-      local doutput = criterion[t]:backward(predict[t], y[t])
+    local obj_grad = criterion:backward(predict,y)
+    local rep_grad = birnn_decoder:backward(rep, obj_grad)
+    local h_grad = rep_grad[1]
+    local h_b_grad = rep_grad[2]
+
+    for i = 1, opt.seq_length do
       local input_x = encoder.oneHot(x[t],vocab_size) -- convert into one hot vector
-      local d = model[t]:backward({input_x,h[t-1]},{dh[t],doutput})
-      dh[t-1] = d[2]
+      local input_grads = model[t]:backward({input_x,h[t-1]},{h_grad[t]})
+      local input_grads_b = model[t]:backward({input_x,h_b[t+1]},{h_b_grad[t]})
     end
-    loss = loss / opt.seq_length
+
+
 --    print(loss)
     final_lost = loss
     return loss, gradParams
@@ -128,7 +140,7 @@ optimState ={
 }
 
 local timer = torch.Timer()
-for epoch = 1, 1000 do
+for epoch = 1, 10 do
   optim.sgd(feval,params, optimState)
 end
 print(timer:time().real .. ' seconds')
