@@ -121,7 +121,14 @@ function feval(p)
     rep_grad[t] = decoders[t]:backward({h[t],h_b[t]}, obj_grad[t])
   end
 
-  
+  -- backward on model
+  for t = opt.seq_length, 1, -1 do
+    local input_x = encoder.oneHot(x[t],vocab_size)
+    print(input_x:cdata())
+    print(h[t-1]:cdata())
+    print(rep_grad[t][1]:cdata())
+    model[t]:backward({input_x, h[t-1]},{rep_grad[t][1]}) -- TODO: error here
+  end
 
 
 
