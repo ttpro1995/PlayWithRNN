@@ -24,7 +24,7 @@ function decoder:create(opt)
   if (opt.model == 'birnn') then
     local h1 = nn.Identity()()
     local h2 = nn.Identity()()
-    local h = nn.JoinTable(1)({h1,h2})
+    local h = nn.JoinTable(2)({h1,h2}) -- join by column (dimension 2)  
     local o = nn.Linear(opt.rnn_size*2 , opt.output_size)({h})
     local y = nn.LogSoftMax()({o})
     return nn.gModule({h1, h2},{y})
