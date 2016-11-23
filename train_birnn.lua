@@ -2,7 +2,7 @@ require 'torch'
 require 'nn'
 require 'nngraph'
 require 'optim'
-require 'model.RNN' -- RNN without decoder
+require 'model.RNN'
 require 'model.decoder'
 require 'util.misc' -- share_params
 require 'util.encoder'
@@ -17,7 +17,7 @@ opt.batch_size =42
 opt.seq_length =50
 opt.train_frac =0.95
 opt.val_frac =0.05
-opt.model = 'birnn'
+
 opt.rnn_size = 128
 
 
@@ -33,42 +33,34 @@ print('vocab size: ' .. vocab_size)
 
 opt.input_size = vocab_size
 opt.output_size = vocab_size
+opt.model = 'birnn'
 
 -- 1: train 2:val 3: text
 -- loader:next_batch(num)
 
 -- master cell for all other cell to share params with
 master_cell = RNN.create(opt)
--- decoder from hidden layer to output
-master_birnn_decoder = decoder:create(opt)
--- a modules to get parameters of cell and decoder
+master_decoder = decoder:create(opt)
+params, gradParams = master_cell:getParameters()
 
 -- create a rnn chain
 model = {}
-model_b = {} -- reserve
-criterion = {} --
---criterion = nn.ClassNLLCriterion()
-birnn_decoder = {} -- linear layer and logsoftmax
+model_b = {}
+decoders = {}
+criterion = {}
 for i = 1,opt.seq_length do
   local cell = RNN.create(opt)
   local cell_b = RNN.create(opt)
-  local d = decoder:create(opt)
   local crit = nn.ClassNLLCriterion()
+  local d = decoder:create(opt)
   share_params(cell,master_cell)
-  share_params(d,master_birnn_decoder)
+  share_params(cell_b, master_cell)
+  share_params(d, master_decoder)
   table.insert(model, cell)
   table.insert(model_b, cell_b)
-  table.insert(birnn_decoder, d)
+  table.insert(decoders, d)
   table.insert(criterion,crit)
 end
-
-local modules = nn.Parallel()
-modules:add(master_cell)
-modules:add(master_birnn_decoder)
-params, gradParams = modules:getParameters()
-
-
-
 
 final_lost = 0
 -- feval
@@ -80,70 +72,49 @@ function feval(p)
   gradParams:zero()
 -- important for feval
 
-  local predict ={} -- y^
-  local rep = {} -- rep = {h, h_b}. raw output of cell, not yet decode.
-  local h = {} -- h
-  local h_b = {} -- h for reserve rnn
-  local rep_grad = {}
-  local obj_grad = {}
+  -- x data
+  -- y label
+  x, y = loader:next_batch(1)
+  x, y = prepro(x,y)
+
+  -- declare something here
   local loss = 0
+  local h = {}
+  local h_b = {}
+  h_0 = torch.Tensor(opt.batch_size,opt.rnn_size):zero()
+  h[0] = h_0
+  h_b[opt.seq_length+1] = h_0
 
-    --
-    -- x data
-    -- y label
-    x, y = loader:next_batch(1)
-    x, y = prepro(x,y)
-    h_0 = torch.Tensor(opt.batch_size,opt.rnn_size):zero()
+  -- forward pass
+  for t = 1, opt.seq_length do
+    model[t]:training()
+    local input_x = encoder.oneHot(x[t],vocab_size) -- convert into one hot vector
+    local output = model[t]:forward({input_x, h[t-1]}) --x[t]:unfold(1,1,1) is element t in sequence of each batch
+    h[t] = output
+  end
 
+  -- forward pass of reserve direction
+  for t = opt.seq_length, 1, -1 do
+    model_b[t]:training()
+    local input_x = encoder.oneHot(x[t],vocab_size) -- convert into one hot vector
+    local output = model_b[t]:forward({input_x, h_b[t+1]}) --x[t]:unfold(1,1,1) is element t in sequence of each batch
+    h_b[t] = output
+  end
 
-    -- forward pass
+  -- h[t]:size() 42 128
 
-    -- calculate h
-    h[0] = h_0
-    for t = 1, opt.seq_length do
-      model[t]:training()
-      local input_x = encoder.oneHot(x[t],vocab_size) -- convert into one hot vector
-      print(input_x:size())
-      print(h[t-1]:size())
-      h[t] = model[t]:forward({input_x, h[t-1]}) -- x[t]:unfold(1,1,1) is element t in sequence of each batch
-      -- loss = loss + criterion[t]:forward(predict[t],y[t])
-    end
+  -- calculate predict
+  local predict = {}
+  for t = 1, opt.seq_length do
+    predict[t] = decoders[t]:forward({h[t],h_b[t]})
+    loss = loss + criterion[t]:forward(predict[t],y[t])
+  end
 
-    -- calculate h_b
-    h[opt.seq_length+1] = h_0
-    for t = opt.seq_length, 1, -1 do
-      model_b[t]:training()
-      local input_x = encoder.oneHot(x[t],vocab_size)
-      h_b[t] = model_b[t]:forward({input_x, h[t+1]})
-    end
-
-
-
-
-    for t = 1, opt.seq_length do
-      local rep = {h[t], h_b[t]}
-      -- calculate predict and loss
-      predict[t] = birnn_decoder[t]:forward(rep)
-      loss = loss + criterion[t]:forward(predict[t],y[t])
-      -- backward decoder and criterion
-      obj_grad[t] = criterion[t]:backward(predict[t],y[t])
-      rep_grad[t] = birnn_decoder[t]:backward(rep, obj_grad[t])
-    end
+  -- predict size: 42 65
+  print(predict[21]:size())
 
 
 
-    -- backward pass
-    for t = opt.seq_length, 1, -1 do
-      local input_x = encoder.oneHot(x[t],vocab_size)
-      local dh = rep_grad[t][1]
-      print('meow first one')
-      model[t]:backward({input_x, h[t-1]},{h_0})
-    end
-
-
-
---    print(loss)
-    final_lost = loss
     return loss, gradParams
 end
 
@@ -154,45 +125,12 @@ optimState ={
 }
 
 local timer = torch.Timer()
-for epoch = 1, 10 do
+for epoch = 1, 1000 do
   optim.sgd(feval,params, optimState)
 end
 print(timer:time().real .. ' seconds')
 print('lost '..final_lost)
 
-function test()
-  predict ={} -- y^
-  h = {} -- h
-  local loss = 0
-
-    --
-    -- x data
-    -- y label
-    x, y = loader:next_batch(1)
-    x, y = prepro(x,y)
-    h_0 = torch.Tensor(opt.rnn_size):zero()
-    h[0] = h_0
-
-    --forward pass
-    for t = 1, opt.seq_length do
-      local output = model[t]:forward({x[t], h[t-1]})
-      h[t] = output[1]
-      predict[t] = output[2]
-      loss = loss + criterion[t]:forward(predict[t],y[t])
-    end
-
-    -- backward pass
-    local dh = {}
-    dh[opt.seq_length] = h_0
-    for t = opt.seq_length, 1, -1 do
-      local doutput = criterion[t]:backward(predict[t], y[t])
-      local d = model[t]:backward({x[t],h[t-1]},{dh[t],doutput})
-      dh[t-1] = d[2]
-    end
-    loss = loss / opt.seq_length
-
-    return loss, gradParams
-end
 
 -- create ivocab
 ivocab = {}
