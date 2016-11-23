@@ -44,7 +44,7 @@ birnn_decoder = decoder:create(opt)
 -- a modules to get parameters of cell and decoder
 local modules = nn.Parallel()
 modules:add(master_cell)
-modules:add(decoder)
+modules:add(birnn_decoder)
 params, gradParams = modules:getParameters()
 
 -- create a rnn chain
@@ -56,7 +56,7 @@ for i = 1,opt.seq_length do
   local cell_b = RNN.create(opt)
   share_params(cell,master_cell)
   table.insert(model, cell)
-  table.insert(model, cell_b)
+  table.insert(model_b, cell_b)
   table.insert(criterion,crit)
 end
 
@@ -83,7 +83,7 @@ function feval(p)
     -- y label
     x, y = loader:next_batch(1)
     x, y = prepro(x,y)
-    h_0 = torch.Tensor(opt.batch_size,opt.rnn_size):zero()
+    h_0 = torch.Tensor(opt.seq_length,opt.rnn_size):zero()
 
 
     -- forward pass
@@ -93,7 +93,7 @@ function feval(p)
     for t = 1, opt.seq_length do
       model[t]:training()
       local input_x = encoder.oneHot(x[t],vocab_size) -- convert into one hot vector
-      local h[t] = model[t]:forward({input_x, h[t-1]}) --x[t]:unfold(1,1,1) is element t in sequence of each batch
+      h[t] = model[t]:forward({input_x, h[t-1]}) -- x[t]:unfold(1,1,1) is element t in sequence of each batch
       -- loss = loss + criterion[t]:forward(predict[t],y[t])
     end
 
@@ -102,14 +102,17 @@ function feval(p)
     for t = opt.seq_length, 1, -1 do
       model_b[t]:training()
       local input_x = encoder.oneHot(x[t],vocab_size)
-      local h_b[t] = model_b[t]:forward({input_x, h[t+1]})
+      h_b[t] = model_b[t]:forward({input_x, h[t+1]})
     end
 
 
 
-    -- calculate predict
+    -- calculate predict 
+    -- TODO: fix here
     rep = {h,h_b}
-    local predict = birnn_decoder:forward(rep)
+    --print(h)
+    print(h_b)
+    predict = birnn_decoder:forward(rep)
 
     -- calculate loss
     loss = criterion:forward(predict,y)
