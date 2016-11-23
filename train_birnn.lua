@@ -105,13 +105,23 @@ function feval(p)
 
   -- calculate predict
   local predict = {}
+  local obj_grad = {}
+  local rep_grad = {}
   for t = 1, opt.seq_length do
     predict[t] = decoders[t]:forward({h[t],h_b[t]})
     loss = loss + criterion[t]:forward(predict[t],y[t])
   end
 
   -- predict size: 42 65
-  print(predict[21]:size())
+
+
+  -- backward on criterion and decoders
+  for t = 1, opt.seq_length do
+    obj_grad[t] = criterion[t]:backward(predict[t],y[t])
+    rep_grad[t] = decoders[t]:backward({h[t],h_b[t]}, obj_grad[t])
+  end
+
+  
 
 
 
